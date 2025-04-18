@@ -1,6 +1,7 @@
 import random
 import pygame
 import math
+import time
 
 class Coco:
     def __init__(self, x, y):
@@ -15,11 +16,10 @@ class Game:
         self.width = width
         self.height = height
         self.cell_size = cell_size
-        self.cocos = []
         self.target_coco = None
         self.player_scores = [0, 0]  # Player 1 and Player 2 scores
+        self.player_clicks = [None, None]  # Store Player 1 and Player 2 clicks
         self.current_turn = 0  # 0 for Player 1, 1 for Player 2
-        self.coco_visible = True  # Track whether the Coco is visible
         pygame.init()
         self.screen = pygame.display.set_mode((width * cell_size, height * cell_size))
         pygame.display.set_caption("Coco Catching Game")
@@ -30,7 +30,6 @@ class Game:
         x = random.randint(0, self.width - 1)
         y = random.randint(0, self.height - 1)
         self.target_coco = Coco(x, y)
-        self.coco_visible = True  # Make the Coco visible
         print(f"Target Coco: {self.target_coco}")
 
     def draw_grid(self):
@@ -40,14 +39,32 @@ class Game:
                 pygame.draw.rect(self.screen, (200, 200, 200), rect, 1)
 
     def draw_coco(self):
-        if self.target_coco and self.coco_visible:
+        if self.target_coco and self.player_clicks[0] and self.player_clicks[1]:  # Show only after both clicks
             rect = pygame.Rect(
                 self.target_coco.x * self.cell_size,
                 self.target_coco.y * self.cell_size,
                 self.cell_size,
                 self.cell_size,
             )
-            pygame.draw.rect(self.screen, (255, 0, 0), rect)
+            pygame.draw.rect(self.screen, (255, 255, 0), rect)  # Yellow for Coco
+
+    def draw_clicks(self):
+        if self.player_clicks[0]:  # Player 1's click
+            rect = pygame.Rect(
+                self.player_clicks[0][0] * self.cell_size,
+                self.player_clicks[0][1] * self.cell_size,
+                self.cell_size,
+                self.cell_size,
+            )
+            pygame.draw.rect(self.screen, (255, 0, 0), rect)  # Red for Player 1
+        if self.player_clicks[1]:  # Player 2's click
+            rect = pygame.Rect(
+                self.player_clicks[1][0] * self.cell_size,
+                self.player_clicks[1][1] * self.cell_size,
+                self.cell_size,
+                self.cell_size,
+            )
+            pygame.draw.rect(self.screen, (0, 0, 255), rect)  # Blue for Player 2
 
     def draw_scores(self):
         score_text = f"Player 1: {self.player_scores[0]}  Player 2: {self.player_scores[1]}"
@@ -58,31 +75,46 @@ class Game:
         return math.sqrt((click_x - coco_x) ** 2 + (click_y - coco_y) ** 2)
 
     def handle_click(self, player, mouse_pos):
-        if not self.target_coco:
-            return
-
         click_x = mouse_pos[0] // self.cell_size
         click_y = mouse_pos[1] // self.cell_size
-        coco_x = self.target_coco.x
-        coco_y = self.target_coco.y
-
-        distance = self.calculate_distance(click_x, click_y, coco_x, coco_y)
-        print(f"Player {player + 1} clicked at ({click_x}, {click_y}), distance: {distance}")
-
-        # Update score for the player with the closest click
-        self.player_scores[player] += max(0, int(10 - distance))  # Score decreases with distance
-
-        # Hide the Coco after Player 1 clicks
-        if self.current_turn == 0:
-            self.coco_visible = False
+        self.player_clicks[player] = (click_x, click_y)
+        print(f"Player {player + 1} clicked at ({click_x}, {click_y})")
 
         # Switch turn to the next player
         self.current_turn = (self.current_turn + 1) % 2
 
-        # If Player 2 has clicked, remove the target and spawn a new one
-        if self.current_turn == 0:
-            pygame.time.wait(5000)  # Wait for 5 seconds before Player 1's next turn
-            self.spawn_coco()
+    def show_results(self):
+        # Calculate distances
+        coco_x, coco_y = self.target_coco.x, self.target_coco.y
+        player1_distance = self.calculate_distance(
+            self.player_clicks[0][0], self.player_clicks[0][1], coco_x, coco_y
+        )
+        player2_distance = self.calculate_distance(
+            self.player_clicks[1][0], self.player_clicks[1][1], coco_x, coco_y
+        )
+
+        # Print distances
+        print(f"Player 1 distance: {player1_distance:.2f}")
+        print(f"Player 2 distance: {player2_distance:.2f}")
+
+        # Determine winner
+        if player1_distance < player2_distance:
+            print("Player 1 wins this round!")
+            self.player_scores[0] += 1
+        elif player2_distance < player1_distance:
+            print("Player 2 wins this round!")
+            self.player_scores[1] += 1
+        else:
+            print("It's a tie!")
+
+        # Show results for 1 second
+        self.screen.fill((0, 0, 0))  # Clear the screen
+        self.draw_grid()
+        self.draw_coco()
+        self.draw_clicks()
+        self.draw_scores()
+        pygame.display.flip()
+        time.sleep(1)
 
     def run(self):
         running = True
@@ -97,6 +129,12 @@ class Game:
                         self.handle_click(0, event.pos)
                     elif self.current_turn == 1 and event.button == 1:  # Player 2's turn (left click)
                         self.handle_click(1, event.pos)
+
+            # If both players have clicked, show results and start the next round
+            if self.player_clicks[0] and self.player_clicks[1]:
+                self.show_results()
+                self.player_clicks = [None, None]  # Reset clicks
+                self.spawn_coco()  # Spawn a new Coco
 
             self.screen.fill((0, 0, 0))  # Clear the screen
             self.draw_grid()
